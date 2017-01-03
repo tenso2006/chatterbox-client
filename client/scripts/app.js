@@ -12,8 +12,6 @@ App.prototype.recursion = function() {
   var context = this;
   var newData = this.fetch.call(context);
   this.previousRoomName = context.selectRoom.call(context, newData, context.previousRoomName);
-  this.init.call(context);
-  setTimeout(context.recursion.bind(context), 1000);
 };
 
 App.prototype.init = function() {
@@ -29,6 +27,7 @@ App.prototype.send = function(message) {
     data: JSON.stringify(message),
     contentType: 'application/json',
     success: function (data) {
+      console.log(data);
       console.log('chatterbox: Message sent');
     },
     error: function (data) {
@@ -42,9 +41,9 @@ App.prototype.checkForAttack = function (data) {
   var newResults = [];
   for (var i = 0; i < data.results.length; i++ ) {
     var datum = data.results[i];
-    var text = datum.text;
-    var roomname = datum.roomname;
-    if ( (text && (text.split('<').length > 1 || text.split('url') > 1)) || (roomname && (roomname.split('<').length > 1 || roomname.split('url') > 1)) ) {
+    var text = String(datum.text);
+    var roomname = String(datum.roomname);
+    if ( (text !== undefined && (text.split('<').length > 1 || text.split('url').length > 1)) || (roomname !== undefined && (roomname.split('<').length > 1 || roomname.split('url').length > 1)) ) {
       continue;
     } else {
       newResults.push(datum);
@@ -82,7 +81,9 @@ App.prototype.fetch = function() {
         });
       }
       var currentData = JSON.stringify(newData.results[0]);
+      console.log(currentData);
       if ( context.previousData !== currentData ) {
+        // console.log(JSON.parse(currentData));
         context.renderMessage.call(context, JSON.parse(currentData));
       }
       context.previousData = currentData;
@@ -102,7 +103,7 @@ App.prototype.clearMessages = function() {
 };
 
 App.prototype.renderMessage = function(message) {
-  console.log('Our room name :' + this.roomname + '. Message room name : ' + message.roomname);
+  // console.log('Our room name :' + this.roomname + '. Message room name : ' + message.roomname);
   if ( message && message.roomname === this.roomname ) {
     $('#chats').append(`<div class='${message.roomname}'> <a class='username' href='#'>${message.username}</a>: ${message.text} @ ${message.roomname}</div>`);
   }
@@ -132,7 +133,7 @@ App.prototype.handleSubmit = function(event) {
 App.prototype.checkRoomNames = function(messages) {
   var roomNames = [];
   messages.forEach( function(message) {
-    if ( message.roomname !== undefined && message.roomname !== '' ) {
+    if ( message && message.roomname && message.roomname !== '' ) {
       message.roomname = message.roomname.replace(/[~`!#$%\^&*+=\-\[\]\\;,/{}|\\":<>\?\ ']/g, '');
       if ( roomNames.indexOf(message.roomname) === -1 ) {
         roomNames.push(message.roomname);
@@ -168,5 +169,5 @@ App.prototype.selectRoom = function(data, previousRoomName) {
 
 var app = new App();
 setTimeout(app.init.bind(app), 1000);
-setTimeout(app.recursion.bind(app), 1000);
+setInterval(app.recursion.bind(app), 1000);
 
