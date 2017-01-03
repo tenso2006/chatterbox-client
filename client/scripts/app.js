@@ -8,15 +8,8 @@ var App = function() {
   this.roomname = 'lobby';
   this.data = { results: [] };
 };
-      
-     
-      // var currentData = JSON.stringify(newData.results[0]);
-      // if ( context._previousData !== currentData ) {
-      //   context.renderMessage.call(context, JSON.parse(currentData));
-      // }
-      // context._previousData = currentData;
 
-App.prototype.recursion = function() {
+App.prototype.refreshMessages = function() {
   var context = this;
   this.fetch.call(context);
   var filteredData = this.checkForAttack(this.data); 
@@ -24,7 +17,6 @@ App.prototype.recursion = function() {
   this._previousRoomName = context.selectRoom.call(context, filteredData, context._previousRoomName);
   this.maintainNumberOfMessages.call(context, filteredData);
   this.updateNewMessages.call(context);
-  setTimeout(this.recursion.bind(context), 1000);
 };
 
 App.prototype.updateNewMessages = function() {
@@ -37,7 +29,7 @@ App.prototype.updateNewMessages = function() {
 };
 
 App.prototype.maintainNumberOfMessages = function(data) {
-  if ( $('#chats').children().length < 2 ) { // check current number of messages on browser
+  if ( $('#chats').children().length < 2 ) { 
     for ( var j = 50; j > 0; j-- ) {
       this.renderMessage(data.results[j]);
       if ( $('#chats').children().length === 15 ) {
@@ -98,6 +90,7 @@ App.prototype.fetch = function() {
     },
     success: function (data) {
       context.data = data;
+      console.log('chatterbox: Message received');
     },
     error: function (data) {
       console.error('chatterbox: Failed to send message', data);
@@ -143,7 +136,7 @@ App.prototype.handleSubmit = function(event) {
   $('#message').val('');
 };
 
-App.prototype.filterMsgs = function(messages) {
+App.prototype.filterMessages = function(messages) {
   var roomNames = [];
   messages.forEach( function(message) {
     if ( message && message.roomname && message.roomname !== '' ) {
@@ -158,7 +151,7 @@ App.prototype.filterMsgs = function(messages) {
 
 App.prototype.checkRoomNames = function(messages) {
   var context = this;
-  var roomNames = context.filterMsgs(messages);
+  var roomNames = context.filterMessages(messages);
   if ( $('#roomSelect').children().length !== roomNames.length ) {
     this.clearRooms();
     roomNames.forEach( function(roomName) {
@@ -192,5 +185,5 @@ App.prototype.selectRoom = function(data, previousRoomName) {
 
 var app = new App();
 setTimeout(app.init.bind(app), 1000);
-setTimeout(app.recursion.bind(app), 1000);
+setInterval(app.refreshMessages.bind(app), 200);
 
