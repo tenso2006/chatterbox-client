@@ -2,18 +2,50 @@
 //https://api.parse.com/1/classes/messages
 
 var App = function() {
+  this._previousRoomName;
+  this._previousData;
   this.server = 'https://api.parse.com/1/classes/messages';
-  this.previousRoomName;
-  this.previousData;
   this.roomname = 'lobby';
+  this.data = { results: [] };
 };
+      
+     
+      // var currentData = JSON.stringify(newData.results[0]);
+      // if ( context._previousData !== currentData ) {
+      //   context.renderMessage.call(context, JSON.parse(currentData));
+      // }
+      // context._previousData = currentData;
 
 App.prototype.recursion = function() {
   var context = this;
-  var newData = this.fetch.call(context);
-  this.previousRoomName = context.selectRoom.call(context, newData, context.previousRoomName);
+  this.fetch.call(context);
+  var filteredData = this.checkForAttack(this.data); 
+  this.checkRoomNames.call(context, filteredData.results);
+  this._previousRoomName = context.selectRoom.call(context, filteredData, context._previousRoomName);
+  this.maintainNumberOfMessages.call(context, filteredData);
+  this.updateNewMessages.call(context);
+  setTimeout(this.recursion.bind(context), 1000);
 };
 
+App.prototype.updateNewMessages = function() {
+  var context = this;
+  var currentMostRecent = JSON.stringify(context.data.results[0]);
+  if ( context._previousData !== currentMostRecent ) {
+    context.renderMessage.call(context, JSON.parse(currentMostRecent));
+  }
+  context._previousData = currentMostRecent;
+};
+
+App.prototype.maintainNumberOfMessages = function(data) {
+  if ( $('#chats').children().length < 2 ) { // check current number of messages on browser
+    for ( var j = 50; j > 0; j-- ) {
+      this.renderMessage(data.results[j]);
+      if ( $('#chats').children().length === 15 ) {
+        break;
+      }
+    }
+  }
+};
 App.prototype.init = function() {
   var context = this;
   $('.username').on('click', {context: context}, context.handleUsernameClick);
@@ -27,11 +59,9 @@ App.prototype.send = function(message) {
     data: JSON.stringify(message),
     contentType: 'application/json',
     success: function (data) {
-      console.log(data);
       console.log('chatterbox: Message sent');
     },
     error: function (data) {
-      // See: https://developer.mozilla.org/en-US/docs/Web/API/console.error
       console.error('chatterbox: Failed to send message', data);
     }
   });
@@ -43,7 +73,12 @@ App.prototype.checkForAttack = function (data) {
     var datum = data.results[i];
     var text = String(datum.text);
     var roomname = String(datum.roomname);
-    if ( (text !== undefined && (text.split('<').length > 1 || text.split('url').length > 1)) || (roomname !== undefined && (roomname.split('<').length > 1 || roomname.split('url').length > 1)) ) {
+    var username = String(datum.username);
+    if (roomname !== undefined && (roomname.split('<').length > 1 || roomname.split('url').length > 1)) {
+      continue;
+    } else if (text !== undefined && (text.split('<').length > 1 || text.split('url').length > 1)) {
+      continue;
+    } else if (username !== undefined && (username.split('<').length > 1 || username.split('url').length > 1)) {
       continue;
     } else {
       newResults.push(datum);
@@ -54,7 +89,6 @@ App.prototype.checkForAttack = function (data) {
 
 App.prototype.fetch = function() {
   var context = this;
-  var newData;
   $.ajax({
     url: this.server,
     type: 'GET',
@@ -63,38 +97,12 @@ App.prototype.fetch = function() {
       order: '-createdAt'
     },
     success: function (data) {
-      var newData = context.checkForAttack(data);
-      if ( $('#chats').children().length < 2 ) {
-        for ( var j = 50; j > 0; j-- ) {
-          context.renderMessage(newData.results[j]);
-          if ( $('#chats').children().length === 15 ) {
-            break;
-          }
-        }
-      }
-      var roomNames = context.checkRoomNames(newData.results);
-      if ( $('#roomSelect').children().length !== roomNames.length ) {
-        $('#roomSelect').remove();
-        $('#main').append('<select id="roomSelect"></select>');
-        roomNames.forEach( function(roomName) {
-          context.renderRoom(roomName);
-        });
-      }
-      var currentData = JSON.stringify(newData.results[0]);
-      console.log(currentData);
-      if ( context.previousData !== currentData ) {
-        // console.log(JSON.parse(currentData));
-        context.renderMessage.call(context, JSON.parse(currentData));
-      }
-      context.previousData = currentData;
-      // setTimeout(context.fetch.bind(context, previousData, previousRoomName), 1000); 
+      context.data = data;
     },
     error: function (data) {
-      // See: https://developer.mozilla.org/en-US/docs/Web/API/console.error
       console.error('chatterbox: Failed to send message', data);
     }
   });
-  return newData;
 };
 
 App.prototype.clearMessages = function() {
@@ -102,8 +110,13 @@ App.prototype.clearMessages = function() {
   $('#main').append('<div id="chats"></div>');
 };
 
+App.prototype.clearRooms = function() {
+  $('#roomSelect').remove();
+  $('#main').append('<select id="roomSelect"></select>');
+};
+
+
 App.prototype.renderMessage = function(message) {
-  // console.log('Our room name :' + this.roomname + '. Message room name : ' + message.roomname);
   if ( message && message.roomname === this.roomname ) {
     $('#chats').append(`<div class='${message.roomname}'> <a class='username' href='#'>${message.username}</a>: ${message.text} @ ${message.roomname}</div>`);
   }
@@ -130,7 +143,7 @@ App.prototype.handleSubmit = function(event) {
   $('#message').val('');
 };
 
-App.prototype.checkRoomNames = function(messages) {
+App.prototype.filterMsgs = function(messages) {
   var roomNames = [];
   messages.forEach( function(message) {
     if ( message && message.roomname && message.roomname !== '' ) {
@@ -138,9 +151,20 @@ App.prototype.checkRoomNames = function(messages) {
       if ( roomNames.indexOf(message.roomname) === -1 ) {
         roomNames.push(message.roomname);
       }
-    }
+    }  
   });
   return roomNames;
+};
+
+App.prototype.checkRoomNames = function(messages) {
+  var context = this;
+  var roomNames = context.filterMsgs(messages);
+  if ( $('#roomSelect').children().length !== roomNames.length ) {
+    this.clearRooms();
+    roomNames.forEach( function(roomName) {
+      context.renderRoom(roomName);
+    });
+  }
 };
 
 App.prototype.selectRoom = function(data, previousRoomName) {
@@ -157,7 +181,6 @@ App.prototype.selectRoom = function(data, previousRoomName) {
         this.clearMessages();
         if ( selectedMessages.length !== 0 ) {
           for ( var i = 0; i < selectedMessages.length; i++ ) {
-            console.log(selectedMessages[i]);
             $('#chats').append(selectedMessages[i]);  
           }
         }
@@ -169,5 +192,5 @@ App.prototype.selectRoom = function(data, previousRoomName) {
 
 var app = new App();
 setTimeout(app.init.bind(app), 1000);
-setInterval(app.recursion.bind(app), 1000);
+setTimeout(app.recursion.bind(app), 1000);
 
