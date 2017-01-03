@@ -5,12 +5,14 @@ var App = function() {
   this.server = 'https://api.parse.com/1/classes/messages';
   this.previousRoomName;
   this.previousData;
+  this.roomname = 'lobby';
 };
 
 App.prototype.recursion = function() {
   var context = this;
   var newData = this.fetch.call(context);
   this.previousRoomName = context.selectRoom.call(context, newData, context.previousRoomName);
+  this.init.call(context);
   setTimeout(context.recursion.bind(context), 1000);
 };
 
@@ -36,6 +38,21 @@ App.prototype.send = function(message) {
   });
 };
 
+App.prototype.checkForAttack = function (data) {
+  var newResults = [];
+  for (var i = 0; i < data.results.length; i++ ) {
+    var datum = data.results[i];
+    var text = datum.text;
+    var roomname = datum.roomname;
+    if ( (text && (text.split('<').length > 1 || text.split('url') > 1)) || (roomname && (roomname.split('<').length > 1 || roomname.split('url') > 1)) ) {
+      continue;
+    } else {
+      newResults.push(datum);
+    }
+  }
+  return { results: newResults };
+};
+
 App.prototype.fetch = function() {
   var context = this;
   var newData;
@@ -47,13 +64,16 @@ App.prototype.fetch = function() {
       order: '-createdAt'
     },
     success: function (data) {
-      newData = data;
-      if ( $('#chats').children().length === 0 ) {
-        for ( var j = 10; j > 0; j-- ) {
-          context.renderMessage(data.results[j]);
+      var newData = context.checkForAttack(data);
+      if ( $('#chats').children().length < 2 ) {
+        for ( var j = 50; j > 0; j-- ) {
+          context.renderMessage(newData.results[j]);
+          if ( $('#chats').children().length === 15 ) {
+            break;
+          }
         }
       }
-      var roomNames = context.checkRoomNames(data.results);
+      var roomNames = context.checkRoomNames(newData.results);
       if ( $('#roomSelect').children().length !== roomNames.length ) {
         $('#roomSelect').remove();
         $('#main').append('<select id="roomSelect"></select>');
@@ -61,12 +81,12 @@ App.prototype.fetch = function() {
           context.renderRoom(roomName);
         });
       }
-      var currentData = JSON.stringify(data.results[0]);
+      var currentData = JSON.stringify(newData.results[0]);
       if ( context.previousData !== currentData ) {
-        context.renderMessage(JSON.parse(currentData));
+        context.renderMessage.call(context, JSON.parse(currentData));
       }
       context.previousData = currentData;
-      // setTimeout(context.fetch.bind(context, previousData, previousRoomName), 1000);
+      // setTimeout(context.fetch.bind(context, previousData, previousRoomName), 1000); 
     },
     error: function (data) {
       // See: https://developer.mozilla.org/en-US/docs/Web/API/console.error
@@ -82,11 +102,14 @@ App.prototype.clearMessages = function() {
 };
 
 App.prototype.renderMessage = function(message) {
-  $('#chats').append(`<div class='${message.roomname}'> <a class='username' href='#'>${message.username}</a>: ${message.text} @ ${message.roomname}</div>`);
+  console.log('Our room name :' + this.roomname + '. Message room name : ' + message.roomname);
+  if ( message && message.roomname === this.roomname ) {
+    $('#chats').append(`<div class='${message.roomname}'> <a class='username' href='#'>${message.username}</a>: ${message.text} @ ${message.roomname}</div>`);
+  }
 };
 
 App.prototype.renderRoom = function(roomName) {
-  $('#roomSelect').append(`<option>${roomName}</option>`);
+  $('#roomSelect').append(`<option class='roomName'>${roomName}</option>`);
 };
 
 App.prototype.handleUsernameClick = function(event) {
@@ -98,9 +121,8 @@ App.prototype.handleSubmit = function(event) {
   var message = {
     username: 'DJ',
     text: text,
-    roomname: 'lobby'
+    roomname: event.data.context.roomname
   };
-  console.log(message);
   if ( message.text !== '' ) {
     event.data.context.send(message);
   }
@@ -110,8 +132,11 @@ App.prototype.handleSubmit = function(event) {
 App.prototype.checkRoomNames = function(messages) {
   var roomNames = [];
   messages.forEach( function(message) {
-    if ( roomNames.indexOf(message.roomname) === -1 && message.roomname !== undefined ) {
-      roomNames.push(message.roomname);
+    if ( message.roomname !== undefined && message.roomname !== '' ) {
+      message.roomname = message.roomname.replace(/[~`!#$%\^&*+=\-\[\]\\;,/{}|\\":<>\?\ ']/g, '');
+      if ( roomNames.indexOf(message.roomname) === -1 ) {
+        roomNames.push(message.roomname);
+      }
     }
   });
   return roomNames;
@@ -122,15 +147,19 @@ App.prototype.selectRoom = function(data, previousRoomName) {
   var rooms = $('#roomSelect').children();
   for ( var i = 0; i < rooms.length; i++ ) {
     if ( rooms[i].selected ) {
-      if ( rooms[i].value === previousRoomName ) {
+      if ( rooms[i].value === previousRoomName || rooms[i].value === '' ) {
         return previousRoomName;
       } else {
         currentRoomName = rooms[i].value;
-        var selectedMessages = $('.lobby');
-        // this.clearMessages();
-        // for ( var i = 0; i < selectedMessages.length; i++ ) {
-        //   this.renderMessage(selectedMessages[i]);  
-        // }
+        this.roomname = currentRoomName;
+        var selectedMessages = jQuery.extend(true, [], $('.' + currentRoomName));
+        this.clearMessages();
+        if ( selectedMessages.length !== 0 ) {
+          for ( var i = 0; i < selectedMessages.length; i++ ) {
+            console.log(selectedMessages[i]);
+            $('#chats').append(selectedMessages[i]);  
+          }
+        }
       }
     }
   }
