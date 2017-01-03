@@ -42,6 +42,13 @@ App.prototype.init = function() {
   var context = this;
   $('.username').on('click', {context: context}, context.handleUsernameClick);
   $('#send .submit').on('click', {context: context}, context.handleSubmit);
+  $('.submitRoomCreate').on('click', {context: context}, context.createRoom);
+};
+
+App.prototype.createRoom = function (event) {
+  var newRoomName = $('#roomName').val();
+  event.data.context.renderRoom(newRoomName);
+  $('#roomName').val('');
 };
 
 App.prototype.send = function(message) {
@@ -152,7 +159,9 @@ App.prototype.filterMessages = function(messages) {
 App.prototype.checkRoomNames = function(messages) {
   var context = this;
   var roomNames = context.filterMessages(messages);
-  if ( $('#roomSelect').children().length !== roomNames.length ) {
+  if ( $('#roomSelect').children().length < roomNames.length ) {
+    // console.log($('#roomSelect').children());
+
     this.clearRooms();
     roomNames.forEach( function(roomName) {
       context.renderRoom(roomName);
