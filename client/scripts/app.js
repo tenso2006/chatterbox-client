@@ -126,8 +126,15 @@ App.prototype.renderRoom = function(roomName) {
   $('#roomSelect').append(`<option class='roomName'>${roomName}</option>`);
 };
 
-App.prototype.handleUsernameClick = function(event) {
+App.prototype.renderFriends = function (friendName) {
+  console.log($('.' + friendName));
+  if (!$('.' + friendName).length ) {
+    $('#friendsList').append(`<div class=${friendName}>${friendName}</div>`);
+  }
+};
 
+App.prototype.handleUsernameClick = function(event) {
+  event.data.context.renderFriends($(this)[0].innerText);
 };
 
 App.prototype.handleSubmit = function(event) {
